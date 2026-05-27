@@ -1,0 +1,23 @@
+FROM node:22-alpine AS base
+WORKDIR /app
+RUN corepack enable
+
+FROM base AS deps
+COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
+COPY frontend/package.json frontend/package.json
+RUN pnpm install --filter frontend --frozen-lockfile=false
+
+FROM deps AS build
+COPY frontend frontend
+RUN pnpm --filter frontend build
+
+FROM base AS runner
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/frontend/node_modules ./frontend/node_modules
+COPY --from=build /app/frontend/.next ./frontend/.next
+COPY --from=build /app/frontend/public ./frontend/public
+COPY frontend/package.json ./frontend/package.json
+WORKDIR /app/frontend
+EXPOSE 3000
+CMD ["pnpm", "start"]
